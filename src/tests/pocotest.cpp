@@ -125,7 +125,7 @@ public:
         const PocoParseResult* pr = static_cast<const PocoParseResult*>(parseResult);
         PocoStringResult* sr = new PocoStringResult;
         std::ostringstream os;
-        Stringifier::stringify(pr->root, true, os, 4);
+        Stringifier::stringify(pr->root, os, 4);
         sr->s = os.str();
         return sr;
     }
