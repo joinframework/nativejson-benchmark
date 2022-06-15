@@ -50,7 +50,7 @@ function gmake_common()
 
     if (os.findlib("v8")) then
         defines { "HAS_V8=1" }
-        links { "v8_base", "v8_libbase", "v8_libplatform", "v8_nosnapshot" }
+        links { "v8_libbase", "v8_libplatform" }
     end
 
     if (os.findlib("libcpprest")) then
