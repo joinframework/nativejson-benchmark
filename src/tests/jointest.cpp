@@ -2,9 +2,12 @@
 
 #include "../test.h"
 
-#include "join/join/core/src/error.cpp"
-#include "join/join/sax/src/value.cpp"
-#include "join/join/sax/include/join/json.hpp"
+#include "join/core/src/error.cpp"
+#include "join/data/src/value.cpp"
+#include "join/data/src/sax.cpp"
+#include "join/data/include/join/pack.hpp"
+#include "join/data/include/join/json.hpp"
+#include "join/data/src/json.cpp"
 
 #include <sstream>
 #include <stack>
@@ -16,25 +19,31 @@ using join::JsonWriter;
 class StatHandler : public JsonReader
 {
 public:
-    StatHandler (Value& root, Stat& stat) : JsonReader (root), stat_(stat) {}
+    StatHandler (Value& root, Stat& stat) 
+    : JsonReader (root)
+    , _stat(stat)
+    {}
+
 protected:
-    virtual int setNull () override { ++stat_.nullCount; setValue (); return 0; }
-    virtual int setBool (bool b) override { if (b) ++stat_.trueCount; else ++stat_.falseCount; setValue (); return 0; }
-    virtual int setInt (int32_t) override { ++stat_.numberCount; setValue (); return 0; }
-    virtual int setUint (uint32_t) override { ++stat_.numberCount; setValue (); return 0; }
-    virtual int setInt64 (int64_t) override { ++stat_.numberCount; setValue (); return 0; }
-    virtual int setUint64 (uint64_t) override { ++stat_.numberCount; setValue (); return 0; }
-    virtual int setDouble (double) override { ++stat_.numberCount; setValue (); return 0; }
-    virtual int setString (const std::string& s) override { ++stat_.stringCount; stat_.stringLength += s.size (); setValue (); return 0; }
-    virtual int startArray (uint32_t) override { ++stat_.arrayCount; setValue (); stack_.push (0); return 0; }
-    virtual int stopArray () override { stat_.elementCount += stack_.top (); stack_.pop (); return 0; }
-    virtual int startObject (uint32_t) override { ++stat_.objectCount; setValue (); stack_.push (0); return 0; }
-    virtual int setKey (const std::string& s) override { ++stat_.stringCount; stat_.stringLength += s.size (); return 0; }
-    virtual int stopObject () override { stat_.memberCount += stack_.top (); stack_.pop (); return 0; }
+    virtual int setNull () override                       { ++_stat.nullCount; setVal (); return 0; }
+    virtual int setBool (bool b) override                 { if (b) ++_stat.trueCount; else ++_stat.falseCount; setVal (); return 0; }
+    virtual int setInt (int32_t) override                 { ++_stat.numberCount; setVal (); return 0; }
+    virtual int setUint (uint32_t) override               { ++_stat.numberCount; setVal (); return 0; }
+    virtual int setInt64 (int64_t) override               { ++_stat.numberCount; setVal (); return 0; }
+    virtual int setUint64 (uint64_t) override             { ++_stat.numberCount; setVal (); return 0; }
+    virtual int setDouble (double) override               { ++_stat.numberCount; setVal (); return 0; }
+    virtual int setString (const std::string& s) override { ++_stat.stringCount; _stat.stringLength += s.size (); setVal (); return 0; }
+    virtual int startArray (uint32_t) override            { ++_stat.arrayCount; setVal (); _stack.push (0); return 0; }
+    virtual int stopArray () override                     { _stat.elementCount += _stack.top (); _stack.pop (); return 0; }
+    virtual int startObject (uint32_t) override           { ++_stat.objectCount; setVal (); _stack.push (0); return 0; }
+    virtual int setKey (const std::string& s) override    { ++_stat.stringCount; _stat.stringLength += s.size (); return 0; }
+    virtual int stopObject () override                    { _stat.memberCount += _stack.top (); _stack.pop (); return 0; }
+
 private:
-    void setValue () { if (stack_.size ()) ++stack_.top (); }
-    std::stack <int> stack_;
-    Stat& stat_;
+    void setVal () { if (_stack.size ()) ++_stack.top (); }
+
+    std::stack <int> _stack;
+    Stat& _stat;
 };
 
 static void GenStat (Stat& stat, const Value& v) 
@@ -116,7 +125,7 @@ public:
             delete pr;
             return 0;
         }
-    	return pr;
+        return pr;
     }
 #endif
 

@@ -4,33 +4,32 @@
 #include <sstream>
 
 #define ARDUINOJSON_ENABLE_STD_STREAM 1
-#include "ArduinoJson/include/ArduinoJson.hpp"
+#include "ArduinoJson/src/ArduinoJson.hpp"
 
 using namespace ArduinoJson;
-using namespace ArduinoJson::Internals;
 
-static void GenStat(Stat& stat, const JsonVariant& v) {
-    if (v.is<const JsonArray&>()) {
-        const JsonArray& a = v.asArray();
-        for (JsonArray::const_iterator itr = a.begin(); itr != a.end(); ++itr)
-            GenStat(stat, *itr);
+static void GenStat(Stat& stat, ArduinoJson::JsonVariantConst v) {
+    if (v.is<JsonArrayConst>()) {
+        JsonArrayConst a = v.as<JsonArrayConst>();
+        for (JsonVariantConst v : a)
+            GenStat(stat, v);
         stat.arrayCount++;
         stat.elementCount += a.size();
     }
-    else if (v.is<const JsonObject&>()) {
-        const JsonObject& o = v.asObject();
-        for (JsonObject::const_iterator itr = o.begin(); itr != o.end(); ++itr) {
-            GenStat(stat, itr->value);
-            stat.stringLength += strlen(itr->key);
+    else if (v.is<JsonObjectConst>()) {
+        JsonObjectConst o = v.as<JsonObjectConst>();
+        for (JsonPairConst kv : o) {
+            GenStat(stat, kv.value());
+            stat.stringLength += strlen(kv.key().c_str());
         }
         stat.objectCount++;
         stat.memberCount += o.size();
         stat.stringCount += o.size();
     }
     else if (v.is<const char*>()) {
-        if (v.asString()) {
+        if (v.as<const char*>()) {
             stat.stringCount++;
-            stat.stringLength += strlen(v.asString());
+            stat.stringLength += strlen(v.as<const char*>());
         }
         else
             stat.nullCount++; // JSON null value is treat as string null pointer
@@ -43,16 +42,14 @@ static void GenStat(Stat& stat, const JsonVariant& v) {
         else
             stat.falseCount++;
     }
+    else {
+        stat.nullCount++;
+    }
 }
 
 class ArduinojsonParseResult : public ParseResultBase {
 public:
-    ArduinojsonParseResult() : buffer() {}
-    ~ArduinojsonParseResult() { free(buffer); }
-
-    char* buffer;
-    DynamicJsonBuffer jsonBuffer;
-    JsonVariant root;
+    JsonDocument doc;
 };
 
 class ArduinojsonStringResult : public StringResultBase {
@@ -71,45 +68,13 @@ public:
 
 #if TEST_PARSE
     virtual ParseResultBase* Parse(const char* json, size_t length) const {
-        (void)length;
         ArduinojsonParseResult* pr = new ArduinojsonParseResult;
-        pr->buffer = (char*)malloc(length);
-        memcpy(pr->buffer, json, length);
-
-        // Determine object or array
-        for (size_t i = 0; i < length; i++) {
-            switch (json[i]) {
-                case '{':
-                    {
-                        JsonObject& o = pr->jsonBuffer.parseObject(pr->buffer);
-                        if (!o.success()) {
-                            delete pr;
-                            return 0;
-                        }
-                        pr->root = o;
-                    }
-                    return pr;
-                case '[':
-                    {
-                        JsonArray& a = pr->jsonBuffer.parseArray(pr->buffer);
-                        if (!a.success()) {
-                            delete pr;
-                            return 0;
-                        }
-                        pr->root = a;
-                    }
-                    return pr;
-                case ' ':
-                case '\t':
-                case '\n':
-                case '\r':
-                    continue;
-            }
-            // Unknown first non-whitespace character
-            break;
+        DeserializationError err = deserializeJson(pr->doc, json, length);
+        if (err) {
+            delete pr;
+            return 0;
         }
-        delete pr;
-        return 0;
+        return pr;
     }
 #endif
 
@@ -118,8 +83,7 @@ public:
         const ArduinojsonParseResult* pr = static_cast<const ArduinojsonParseResult*>(parseResult);
         ArduinojsonStringResult* sr = new ArduinojsonStringResult;
         std::ostringstream os;
-        StreamPrintAdapter adapter(os);
-        pr->root.printTo(adapter);
+        serializeJson(pr->doc, os);
         sr->s = os.str();
         return sr;
     }
@@ -130,8 +94,7 @@ public:
         const ArduinojsonParseResult* pr = static_cast<const ArduinojsonParseResult*>(parseResult);
         ArduinojsonStringResult* sr = new ArduinojsonStringResult;
         std::ostringstream os;
-        StreamPrintAdapter adapter(os);
-        pr->root.prettyPrintTo(adapter);
+        serializeJsonPretty(pr->doc, os);
         sr->s = os.str();
         return sr;
     }
@@ -141,34 +104,30 @@ public:
     virtual bool Statistics(const ParseResultBase* parseResult, Stat* stat) const {
         const ArduinojsonParseResult* pr = static_cast<const ArduinojsonParseResult*>(parseResult);
         memset(stat, 0, sizeof(Stat));
-        GenStat(*stat, pr->root);
+        GenStat(*stat, pr->doc.as<JsonVariantConst>());
         return true;
     }
 #endif
 
 #if TEST_CONFORMANCE
     virtual bool ParseDouble(const char* json, double* d) const {
-        ArduinojsonParseResult pr;
-        pr.buffer = strdup(json);
-        JsonArray& a = pr.jsonBuffer.parseArray(pr.buffer);
-        if (a.success() && a.size() == 1) {
-            *d = (double)a[0];
-            return true;
-        }
-        else
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, json);
+        if (err) {
             return false;
+        }
+        *d = doc[0].as<double>();
+        return true;
     }
 
     virtual bool ParseString(const char* json, std::string& s) const {
-        ArduinojsonParseResult pr;
-        pr.buffer = strdup(json);
-        JsonArray& a = pr.jsonBuffer.parseArray(pr.buffer);
-        if (a.success() && a.size() == 1) {
-            s = a[0].asString();
-            return true;
-        }
-        else
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, json);
+        if (err) {
             return false;
+        }
+        s = doc[0].as<std::string>();
+        return true;
     }
 #endif
 };

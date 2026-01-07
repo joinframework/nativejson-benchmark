@@ -2,12 +2,13 @@
 
 #include "../test.h"
 
-#include "nlohmann/src/json.hpp"
+#include "taocppjson/contrib/nlohmann/json.hpp"
 
 #include "taocppjson/include/tao/json.hpp"
-
-#include "taocppjson/contrib/nlohmann/to_value.hpp"
-#include "taocppjson/contrib/nlohmann/from_value.hpp"
+#include "taocppjson/include/tao/json/contrib/from_nlohmann.hpp"
+#include "taocppjson/include/tao/json/contrib/to_nlohmann.hpp"
+#include "taocppjson/include/tao/json/events/from_string.hpp"
+#include "taocppjson/include/tao/json/events/to_stream.hpp"
 
 using namespace nlohmann;
 
@@ -52,6 +53,10 @@ static void GenStat(Stat& stat, const json& v) {
         stat.nullCount++;
         break;
 
+    case json::value_t::binary:
+        // Handle binary type - not used in stats
+        break;
+
     case json::value_t::discarded:
         throw std::logic_error( "code should be unreachable" );
     }
@@ -80,8 +85,8 @@ public:
     virtual ParseResultBase* Parse(const char* j, size_t length) const {
         NlohmannParseResult* pr = new NlohmannParseResult;
         try {
-            tao::json::nlohmann::to_value<json> handler;
-            tao::json::sax::from_string(j, length, handler);
+            tao::json::events::to_nlohmann<json> handler;
+            tao::json::events::from_string(handler, j, length);
             pr->root = std::move( handler.value );
         }
         catch (...) {
@@ -97,8 +102,8 @@ public:
         const NlohmannParseResult* pr = static_cast<const NlohmannParseResult*>(parseResult);
         NlohmannStringResult* sr = new NlohmannStringResult;
         std::ostringstream oss;
-        tao::json::sax::to_stream oss_handler(oss);
-        tao::json::nlohmann::from_value(pr->root, oss_handler);
+        tao::json::events::to_stream oss_handler(oss);
+        tao::json::events::from_nlohmann(oss_handler, pr->root);
         sr->s = oss.str();
         return sr;
     }
@@ -109,8 +114,8 @@ public:
         const NlohmannParseResult* pr = static_cast<const NlohmannParseResult*>(parseResult);
         NlohmannStringResult* sr = new NlohmannStringResult;
         std::ostringstream oss;
-        tao::json::sax::to_pretty_stream oss_handler(oss, 4);
-        tao::json::nlohmann::from_value(pr->root, oss_handler);
+        tao::json::events::to_pretty_stream oss_handler(oss, 4);
+        tao::json::events::from_nlohmann(oss_handler, pr->root);
         sr->s = oss.str();
         return sr;
     }

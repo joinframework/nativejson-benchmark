@@ -1,20 +1,24 @@
 function setTargetObjDir(outDir)
-	targetdir(outDir)
-	objdir(string.lower("../intermediate/%{cfg.shortname}/" .. _ACTION))
-	targetsuffix(string.lower("_%{cfg.shortname}_" .. _ACTION))
+    targetdir(outDir)
+    objdir(string.lower("../intermediate/%{cfg.shortname}/" .. _ACTION))
+    targetsuffix(string.lower("_%{cfg.shortname}_" .. _ACTION))
 end
 
 function copyfiles(dstDir, srcWildcard)
-	os.mkdir(dstDir)
-	local matches = os.matchfiles(srcWildcard)
-	for _, f in ipairs(matches) do
-		local filename = string.match(f, ".-([^\\/]-%.?[^%.\\/]*)$")
-		os.copyfile(f, dstDir .. "/" .. filename)
-	end
+    os.mkdir(dstDir)
+    local matches = os.matchfiles(srcWildcard)
+    for _, f in ipairs(matches) do
+        local filename = string.match(f, ".-([^\\/]-%.?[^%.\\/]*)$")
+        os.copyfile(f, dstDir .. "/" .. filename)
+    end
 end
 
 function gmake_common()
     buildoptions "-march=native -Wall -Wextra"
+    libdirs {
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/local/lib"
+    }
     if (os.findlib("boost_system")) then
         defines { "HAS_BOOST=1" }
         links { "boost_system" }
@@ -58,7 +62,7 @@ function gmake_common()
         links { "cpprest"}
     end
 
-    configuration "macosx"
+    filter "system:macosx"
         if (os.isdir("/usr/local/opt/qt5/include")) then
             defines { "HAS_QT=1" }
             links { "QtCore.framework" }
@@ -70,52 +74,55 @@ function gmake_common()
         if (os.isdir("/usr/local/opt/v8/")) then
             includedirs { "/usr/local/opt/v8/" }
         end
+
+    filter {}
 end
 
-solution "benchmark"
-	configurations { "release" }
-	platforms { "x32", "x64" }
+workspace "benchmark"
+    configurations { "release" }
+    platforms { "x32", "x64" }
 
-	location ("./" .. (_ACTION or ""))
-	language "C++"
-	flags { "ExtraWarnings" }
-	defines { "__STDC_FORMAT_MACROS=1" }
+    location ("./" .. (_ACTION or ""))
+    language "C++"
+    warnings "Extra"
+    defines { "__STDC_FORMAT_MACROS=1" }
 
-	configuration "release"
-		defines { "NDEBUG" }
-		optimize "Full"
+    filter "configurations:release"
+        defines { "NDEBUG" }
+        optimize "Full"
 
-	configuration "vs*"
-		defines { "_CRT_SECURE_NO_WARNINGS" }
+    filter "action:vs*"
+        defines { "_CRT_SECURE_NO_WARNINGS" }
 
-	configuration "gmake"
-		gmake_common()
+    filter "action:gmake*"
+        gmake_common()
+    filter {}
 
-	project "jsonclibs"
-		kind "StaticLib"
+    project "jsonclibs"
+        kind "StaticLib"
 
         includedirs {
             "../thirdparty/",
             "../thirdparty/include/",
             "../thirdparty/ujson4c/3rdparty/",
             "../thirdparty/pjson/inc/",
-  			"../thirdparty/udp-json-parser/",
+            "../thirdparty/udp-json-parser/",
             "../thirdparty/facil.io/lib/facil/core/types",
             "../thirdparty/facil.io/lib/facil/core/types/fiobj",
-            "../thirdparty/join/join/core/include",
-            "../thirdparty/join/join/sax/include",
+            "../thirdparty/join/core/include",
+            "../thirdparty/join/data/include",
         }
 
-		files {
-			"../src/**.c",
-		}
+        files {
+            "../src/**.c",
+        }
 
-		setTargetObjDir("../bin")
+        setTargetObjDir("../bin")
 
-		copyfiles("../thirdparty/include/yajl", "../thirdparty/yajl/src/api/*.h" )
+        copyfiles("../thirdparty/include/yajl", "../thirdparty/yajl/src/api/*.h" )
 
-	project "nativejson"
-		kind "ConsoleApp"
+    project "nativejson"
+        kind "ConsoleApp"
 
         includedirs {
             "../thirdparty/",
@@ -127,58 +134,73 @@ solution "benchmark"
             "../thirdparty/include/",
             "../thirdparty/json-voorhees/include",
             "../thirdparty/json-voorhees/src",
-            "../thirdparty/jsoncons/src",
-            "../thirdparty/ArduinoJson/include",
+            "../thirdparty/jsoncons/include",
+            "../thirdparty/ArduinoJson/src",
             "../thirdparty/include/jeayeson/include/dummy",
-  			"../thirdparty/jvar/include",
+            "../thirdparty/jvar/include",
             "../thirdparty/pjson/inc",
             "../thirdparty/ULib/include",
             "../thirdparty/facil.io/lib/facil/core/types",
             "../thirdparty/facil.io/lib/facil/core/types/fiobj",
             "../thirdparty/simdjson/singleheader",
-            "../thirdparty/join/join/core/include",
-            "../thirdparty/join/join/sax/include",
+            "../thirdparty/join/core/include",
+            "../thirdparty/join/data/include",
+            "../thirdparty/nlohmann/include",
+            "../thirdparty/taocppjson/include",
+            "../thirdparty/taocppjson/external/PEGTL/include/",
         }
 
-      linkoptions { "../../thirdparty/ULib/src/ulib/.libs/libulib.a" }
+        -- linkoptions { "../../thirdparty/ULib/src/ulib/.libs/libulib.a" }
 
-		files {
-			"../src/*.h",
-			"../src/*.cpp",
-			"../src/tests/*.cpp"
-		}
+        files {
+            "../src/*.h",
+            "../src/*.cpp",
+            "../src/tests/*.cpp"
+        }
 
-		libdirs { "../bin",
-                "../thirdparty/simdjson"  
-                }
+        -- Exclude test files for libraries not being used
+        removefiles {
+            "../src/tests/facil.io.cpp",
+            "../src/tests/jsonconstest.cpp",
+            "../src/tests/jvartest.cpp",
+            "../src/tests/ujsontest.cpp",
+            "../src/tests/ULibtest.cpp",
+            "../src/tests/v8test.cpp",
+        }
 
-		setTargetObjDir("../bin")
+        libdirs {
+            "../bin",
+            "../thirdparty/simdjson"  
+        }
 
-		-- linkLib("jsonclibs")
-		links "jsonclibs"
+        setTargetObjDir("../bin")
 
-		configuration "gmake"
-			buildoptions "-std=c++14"
+        -- linkLib("jsonclibs")
+        links "jsonclibs"
 
-solution "jsonstat"
+        filter "action:gmake*"
+            buildoptions "-std=c++20"
+        filter {}
+
+workspace "jsonstat"
     configurations { "release" }
     platforms { "x32", "x64" }
     location ("./" .. (_ACTION or ""))
     language "C++"
-    flags { "ExtraWarnings" }
+    warnings "Extra"
 
     defines {
-    	"USE_MEMORYSTAT=0",
-    	"TEST_PARSE=1",
-    	"TEST_STRINGIFY=0",
-    	"TEST_PRETTIFY=0",
-    	"TEST_TEST_STATISTICS=1",
-    	"TEST_SAXROUNDTRIP=0",
-    	"TEST_SAXSTATISTICS=0",
-    	"TEST_SAXSTATISTICSUTF16=0",
-    	"TEST_CONFORMANCE=0",
-    	"TEST_INFO=0"
-	}
+        "USE_MEMORYSTAT=0",
+        "TEST_PARSE=1",
+        "TEST_STRINGIFY=0",
+        "TEST_PRETTIFY=0",
+        "TEST_TEST_STATISTICS=1",
+        "TEST_SAXROUNDTRIP=0",
+        "TEST_SAXSTATISTICS=0",
+        "TEST_SAXSTATISTICSUTF16=0",
+        "TEST_CONFORMANCE=0",
+        "TEST_INFO=0"
+    }
 
     includedirs {
         "../thirdparty/",
@@ -190,8 +212,8 @@ solution "jsonstat"
         "../thirdparty/include/",
         "../thirdparty/json-voorhees/include",
         "../thirdparty/json-voorhees/src",
-        "../thirdparty/jsoncons/src",
-        "../thirdparty/ArduinoJson/include",
+        "../thirdparty/jsoncons/include",
+        "../thirdparty/ArduinoJson/src",
         "../thirdparty/include/jeayeson/include/dummy",
         "../thirdparty/jvar/include",
         "../thirdparty/pjson/inc",
@@ -199,57 +221,64 @@ solution "jsonstat"
         "../thirdparty/facil.io/lib/facil/core/types",
         "../thirdparty/facil.io/lib/facil/core/types/fiobj",
         "../thirdparty/simdjson/singleheader",
-        "../thirdparty/join/join/core/include",
-        "../thirdparty/join/join/sax/include",
+        "../thirdparty/join/core/include",
+        "../thirdparty/join/data/include",
+        "../thirdparty/nlohmann/include",
+        "../thirdparty/taocppjson/include",
+        "../thirdparty/taocppjson/external/PEGTL/include/",
     }
 
-    configuration "release"
+    filter "configurations:release"
         defines { "NDEBUG" }
         optimize "Full"
 
-    configuration "vs*"
+    filter "action:vs*"
         defines { "_CRT_SECURE_NO_WARNINGS" }
 
-	configuration "gmake"
+    filter "action:gmake*"
         gmake_common()
 
-	project "jsonclibs2"
-		kind "StaticLib"
+    filter {}
+
+    project "jsonclibs2"
+        kind "StaticLib"
 
         includedirs {
             "../thirdparty/",
             "../thirdparty/include/",
             "../thirdparty/ujson4c/3rdparty/",
-  			"../thirdparty/udp-json-parser/",
+            "../thirdparty/udp-json-parser/",
             "../thirdparty/facil.io/lib/facil/core/types",
             "../thirdparty/facil.io/lib/facil/core/types/fiobj",
-            "../thirdparty/join/join/core/include",
-            "../thirdparty/join/join/sax/include",
+            "../thirdparty/join/core/include",
+            "../thirdparty/join/data/include",
         }
 
-		files {
-			"../src/**.c",
-		}
+        files {
+            "../src/**.c",
+        }
 
         setTargetObjDir("../bin/jsonstat")
 
-		copyfiles("../thirdparty/include/yajl", "../thirdparty/yajl/src/api/*.h", "../thirdparty/simdjson/src/simdjson.cpp")
+        copyfiles("../thirdparty/include/yajl", "../thirdparty/yajl/src/api/*.h", "../thirdparty/simdjson/src/simdjson.cpp")
 
     local testfiles = os.matchfiles("../src/tests/*.cpp")
     for _, testfile in ipairs(testfiles) do
         project("jsonstat_" .. path.getbasename(testfile))
             kind "ConsoleApp"
             files {
-            	"../src/jsonstat/jsonstatmain.cpp",
-            	"../src/memorystat.cpp",
-            	testfile
-			}
-			libdirs { "../bin/jsonstat" }
-			links "jsonclibs2"
+                "../src/jsonstat/jsonstatmain.cpp",
+                "../src/memorystat.cpp",
+                testfile
+            }
+            libdirs { "../bin/jsonstat" }
+            links "jsonclibs2"
             setTargetObjDir("../bin/jsonstat")
 
-      linkoptions { "../../thirdparty/ULib/src/ulib/.libs/libulib.a" }
+            -- linkoptions { "../../thirdparty/ULib/src/ulib/.libs/libulib.a" }
 
-			configuration "gmake"
-				buildoptions "-std=c++14"
+            filter "action:gmake*"
+                buildoptions "-std=c++20"
+            filter {}
     end
+

@@ -1,7 +1,7 @@
 #if defined(__clang__) || defined(__GNUC__)
 
 #include "../test.h"
-#include "nlohmann/src/json.hpp"
+#include "nlohmann/include/nlohmann/json.hpp"
 
 using namespace nlohmann;
 
