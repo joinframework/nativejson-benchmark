@@ -36,7 +36,7 @@ protected:
     virtual int startArray (uint32_t) override            { ++_stat.arrayCount; setVal (); _stack.push (0); return 0; }
     virtual int stopArray () override                     { _stat.elementCount += _stack.top (); _stack.pop (); return 0; }
     virtual int startObject (uint32_t) override           { ++_stat.objectCount; setVal (); _stack.push (0); return 0; }
-    virtual int setKey (const std::string& s) override    { ++_stat.stringCount; _stat.stringLength += s.size (); return 0; }
+    virtual int setKey (const Value& s) override          { ++_stat.stringCount; _stat.stringLength += s.size (); return 0; }
     virtual int stopObject () override                    { _stat.memberCount += _stack.top (); _stack.pop (); return 0; }
 
 private:
